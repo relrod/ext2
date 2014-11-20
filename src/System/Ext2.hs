@@ -19,63 +19,67 @@ module System.Ext2 where
 import Control.Applicative
 import Data.Binary
 import Data.Binary.Get
+import Data.Bits
 import qualified Data.ByteString.Lazy.Char8 as BL
+import Debug.Trace
 
 data Superblock = Superblock {
-    inodesCount     :: Word32
+    sbInodesCount     :: Word32
     -- ^ Total number of inodes in the file system
-  , blocksCount     :: Word32
+  , sbBlocksCount     :: Word32
     -- ^ Total number of blocks in the file system
-  , rBlocksCount    :: Word32
+  , sbRBlocksCount    :: Word32
     -- ^ Number of blocks reserved for the superuser
-  , freeBlocksCount :: Word32
+  , sbFreeBlocksCount :: Word32
     -- ^ Number of unallocated blocks
-  , freeInodesCount :: Word32
+  , sbFreeInodesCount :: Word32
     -- ^ Number of unallocated inodes
-  , firstDataBlock  :: Word32
+  , sbFirstDataBlock  :: Word32
     -- ^ Block number of the block containing the superblock
-  , logBlockSize    :: Word32
+  , sbLogBlockSize    :: Word32
     -- ^ log2(block size) - 10
-  , logFragSize     :: Word32
+  , sbLogFragSize     :: Word32
     -- ^ log2(fragment size) - 10
-  , blocksPerGroup  :: Word32
+  , sbBlocksPerGroup  :: Word32
     -- ^ Number of blocks in each group
-  , fragsPerGroup   :: Word32
+  , sbFragsPerGroup   :: Word32
     -- ^ Number of gragments in each group
-  , inodesPerGroup  :: Word32
+  , sbInodesPerGroup  :: Word32
     -- ^ Number of inodes in each group
-  , mTime           :: Word32
+  , sbMTime           :: Word32
     -- ^ Last mount time
-  , wTime           :: Word32
+  , sbWTime           :: Word32
     -- ^ Last write time
-  , mntCount        :: Word16
+  , sbMntCount        :: Word16
     -- ^ Number of mounts since last consistency check
-  , maxMntCount     :: Word16
+  , sbMaxMntCount     :: Word16
     -- ^ Number of allowed mounts before requiring a consistency check
-  , magic           :: Word16
+  , sbMagic           :: Word16
     -- ^ ext2 signature: @0xef53@
-  , state           :: Word16
+  , sbState           :: Word16
     -- ^ Filesystem state
-  , errors          :: Word16
+  , sbErrors          :: Word16
     -- ^ What to do on an error condition
-  , minorRevLevel   :: Word16
+  , sbMinorRevLevel   :: Word16
     -- ^ Minor portion of version
-  , lastCheck       :: Word32
+  , sbLastCheck       :: Word32
     -- ^ Time of last consistency check
-  , checkInterval   :: Word32
+  , sbCheckInterval   :: Word32
     -- ^ Interval between forced consistency checks
-  , creatorOs       :: Word32
+  , sbCreatorOs       :: Word32
     -- ^ Operating system ID
-  , revLevel        :: Word32
+  , sbRevLevel        :: Word32
     -- ^ Major portion of version
-  , defResuid       :: Word16
+  , sbDefResuid       :: Word16
     -- ^ User ID that can use reserved blocks
-  , defResgid       :: Word16
+  , sbDefResgid       :: Word16
     -- ^ Group ID that can use reserved blocks
   } deriving (Eq, Ord, Show)
 
 -- | Reads the superblock information from an ext2 filesystem. __Does not__ skip
 -- the first 1024 bytes to where the superblock lives.
+--
+-- See also 'readExtendedSuperblock'
 readSuperblock :: Get Superblock
 readSuperblock = do
   Superblock <$> getWord32le
@@ -104,8 +108,89 @@ readSuperblock = do
              <*> getWord16le
              <*> getWord16le
 
+data ExtendedSuperblock = ExtendedSuperblock {
+    sbFirstIno :: Word32
+  , sbInodeSize :: Word16
+  , sbBlockGroupNumber :: Word16
+  , sbFeatureCompat :: Word32
+  , sbFeatureIncompat :: Word32
+  , sbFeatureRoCompat :: Word32
+  , sbUuid :: BL.ByteString
+  , sbVolumeName :: BL.ByteString
+  , sbLastMounted :: BL.ByteString
+  , sbAlgoBitmap :: Word32
+  , sbPreallocBlocks :: Word8
+  , sbPreallocDirBlocks :: Word8
+  , sbUnusedAlignment :: Word16
+  , sbJournalUuid :: BL.ByteString
+  , sbJournalInum :: Word32
+  , sbJournalDev :: Word32
+  , sbJournalLastOrphan :: Word32
+  , sbUnused :: BL.ByteString
+  } deriving (Eq, Ord, Show)
+
+readExtendedSuperblock :: Get ExtendedSuperblock
+readExtendedSuperblock = do
+  let esb = ExtendedSuperblock <$> getWord32le
+                               <*> getWord16le
+                               <*> getWord16le
+                               <*> getWord32le
+                               <*> getWord32le
+                               <*> getWord32le
+                               <*> getLazyByteString 16
+                               <*> getLazyByteString 16
+                               <*> getLazyByteString 64
+                               <*> getWord32le
+                               <*> getWord8
+                               <*> getWord8
+                               <*> getWord16le
+                               <*> getLazyByteString 16
+                               <*> getWord32le
+                               <*> getWord32le
+                               <*> getWord32le
+                               <*> getLazyByteString 786
+  esb
+
+data BlockGroupDescriptorTable = BlockGroupDescriptorTable {
+    bgBlockBitmap :: Word32
+  , bgInodeBitmap :: Word32
+  , bgInodeTable  :: Word32
+  , bgFreeBlocksCount :: Word16
+  , bgFreeInodesCount :: Word16
+  , bgUsedDirsCount   :: Word16
+  } deriving (Eq, Ord, Show)
+
+-- | Reads the block group descriptor table. The last 12 ("reserved") bytes are
+-- ignored and skipped over (consumed).
+readBlockGroupDescriptorTable :: Get BlockGroupDescriptorTable
+readBlockGroupDescriptorTable = do
+  let sb = BlockGroupDescriptorTable <$> getWord32le
+                                     <*> getWord32le
+                                     <*> getWord32le
+                                     <*> getWord16le
+                                     <*> getWord16le
+                                     <*> getWord16le
+  sb
+
+-- | Get the number of block groups within the file system.
+blockGroupCount :: Superblock -> Int
+blockGroupCount sb =
+  ceiling $
+    (fromIntegral (sbBlocksCount sb) :: Double) / fromIntegral (sbBlocksPerGroup sb)
+
+-- | Given a 'Superblock', and the block number, get the byte number at which
+-- it starts.
+byteFromBlock :: Superblock -> Int -> Int
+byteFromBlock sb x = x * (1024 `shiftL` fromIntegral (sbLogBlockSize sb))
+
 -- | Open an ext2 filesystem and parse out the 'Superblock'.
 getSuperblock :: String -> IO Superblock
 getSuperblock fn = do
   input <- BL.readFile fn
   return $ runGet (skip 1024 >> readSuperblock) input
+
+-- | Open an ext2 filesystem and parse out the 'BlockGroupDescriptorTable'.
+getBGDT :: String -> IO BlockGroupDescriptorTable
+getBGDT fn = do
+  input <- BL.readFile fn
+  return $ runGet (skip 2048 >> readBlockGroupDescriptorTable) input
