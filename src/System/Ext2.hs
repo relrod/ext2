@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      : System.Ext2
@@ -14,15 +15,71 @@
 -- use it for anything that you care about for now, because I don't trust
 -- myself.
 ----------------------------------------------------------------------------
-module System.Ext2 where
+module System.Ext2 (
+    -- * Superblock
+    Superblock (..)
+    -- ** Lenses
+  , wTime, state, revLevel, rBlocksCount, mntCount, minorRevLevel, maxMntCount
+  , magic, mTime, logFragSize, logBlockSize, lastCheck, inodesPerGroup
+  , inodesCount, freeInodesCount, freeBlocksCount, fragsPerGroup, firstDataBlock
+  , errors, defResuid, defResgid, creatorOs, checkInterval, blocksPerGroup
+  , blocksCount
+    -- ** Parsers
+  , readSuperblock
+
+    -- * ExtendedSuperblock
+  , ExtendedSuperblock (..)
+    -- ** Lenses
+  , volumeName, uuid, unusedAlignment, preallocDirBlocks, preallocBlocks
+  , lastMounted, journalUuid, journalLastOrphan, journalInum, journalDev
+  , inodeSize, firstIno, featureRoCompat, featureIncompat, featureCompat
+  , blockGroupNumber, algoBitmap
+    -- ** Parsers
+  , readExtendedSuperblock
+
+    -- * BlockGroupDescriptorTable
+  , BlockGroupDescriptorTable (..)
+    -- ** Lenses
+  , usedDirsCount, inodeTable, inodeBitmap, freeInodesCountBg, freeBlocksCountBg
+  , blockBitmap
+    -- ** Parsers
+  , readBlockGroupDescriptorTable
+
+    -- * Inode
+  , Inode (..)
+    -- ** Lenses
+  , uid, size, osd2, osd1, mtime, mode, linksCount, gid, generation, flags
+  , fileAcl, faddr, dtime, dirAcl, ctime, blocks, block, atime
+    -- ** Parsers
+  , readInode
+  , readInodeTable
+
+    -- * Directory
+  , Directory (..)
+    -- ** Lenses
+  , recLen, nameLen, name, inode, fileType
+    -- ** Parsers
+  , readDirectory
+
+    -- * Utility functions
+  , blockGroupCount
+  , byteFromBlock
+
+    -- * Silly test/helper functions
+  , getSuperblock
+  , getBGDT
+  , getAllTables
+
+  ) where
 
 import Control.Applicative
+import Control.Lens
 import Control.Monad
 import Data.Binary
 import Data.Binary.Get
 import Data.Bits
 import qualified Data.ByteString.Lazy.Char8 as BL
-import Debug.Trace
+import System.Ext2.Internal.LensHacks
 
 data Superblock = Superblock {
     sbInodesCount     :: Word32
@@ -77,6 +134,8 @@ data Superblock = Superblock {
     -- ^ Group ID that can use reserved blocks
   } deriving (Eq, Ord, Show)
 
+makeLensesWith namespaceLensRules ''Superblock
+
 -- | Reads the superblock information from an ext2 filesystem. __Does not__ skip
 -- the first 1024 bytes to where the superblock lives.
 --
@@ -129,6 +188,8 @@ data ExtendedSuperblock = ExtendedSuperblock {
   , sbJournalLastOrphan :: Word32
   } deriving (Eq, Ord, Show)
 
+makeLensesWith namespaceLensRules ''ExtendedSuperblock
+
 readExtendedSuperblock :: Get ExtendedSuperblock
 readExtendedSuperblock = do
   let esb = ExtendedSuperblock <$> getWord32le
@@ -154,10 +215,12 @@ data BlockGroupDescriptorTable = BlockGroupDescriptorTable {
     bgBlockBitmap :: Word32
   , bgInodeBitmap :: Word32
   , bgInodeTable  :: Word32
-  , bgFreeBlocksCount :: Word16
-  , bgFreeInodesCount :: Word16
+  , bgFreeBlocksCountBg :: Word16
+  , bgFreeInodesCountBg :: Word16
   , bgUsedDirsCount   :: Word16
   } deriving (Eq, Ord, Show)
+
+makeLensesWith namespaceLensRules ''BlockGroupDescriptorTable
 
 -- | Reads the block group descriptor table. The last 12 ("reserved") bytes are
 -- ignored and skipped over (consumed).
@@ -191,6 +254,8 @@ data Inode = Inode {
   , iFaddr :: Word32
   , iOsd2 :: BL.ByteString -- TODO: Use a more appropriate type here.
   } deriving (Eq, Ord, Show)
+
+makeLensesWith namespaceLensRules ''Inode
 
 readInode :: Get Inode
 readInode =
@@ -275,14 +340,16 @@ data Directory = Directory {
   , dName :: BL.ByteString
   } deriving (Eq, Ord, Show)
 
+makeLensesWith namespaceLensRules ''Directory
+
 readDirectory :: Get Directory
 readDirectory = do
-  inode <- getWord32le
-  recLen <- getWord16le
-  nameLen <- getWord8
-  fileType <- getWord8
-  name <- getLazyByteString (fromIntegral nameLen)
-  return $ Directory inode recLen nameLen fileType name
+  inode' <- getWord32le
+  recLen' <- getWord16le
+  nameLen' <- getWord8
+  fileType' <- getWord8
+  name' <- getLazyByteString (fromIntegral nameLen')
+  return $ Directory inode' recLen' nameLen' fileType' name'
 
 -- | Get the number of block groups within the file system.
 blockGroupCount :: Superblock -> Int
