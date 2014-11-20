@@ -17,6 +17,7 @@
 module System.Ext2 where
 
 import Control.Applicative
+import Control.Monad
 import Data.Binary
 import Data.Binary.Get
 import Data.Bits
@@ -126,7 +127,6 @@ data ExtendedSuperblock = ExtendedSuperblock {
   , sbJournalInum       :: Word32
   , sbJournalDev        :: Word32
   , sbJournalLastOrphan :: Word32
-  , sbUnused            :: BL.ByteString
   } deriving (Eq, Ord, Show)
 
 readExtendedSuperblock :: Get ExtendedSuperblock
@@ -148,7 +148,6 @@ readExtendedSuperblock = do
                                <*> getWord32le
                                <*> getWord32le
                                <*> getWord32le
-                               <*> getLazyByteString 786
   esb
 
 data BlockGroupDescriptorTable = BlockGroupDescriptorTable {
@@ -172,6 +171,119 @@ readBlockGroupDescriptorTable = do
                                      <*> getWord16le
   sb
 
+data Inode = Inode {
+    iMode :: Word16
+  , iUid :: Word16
+  , iSize :: Word32
+  , iAtime :: Word32
+  , iCtime :: Word32
+  , iMtime :: Word32
+  , iDtime :: Word32
+  , iGid :: Word16
+  , iLinksCount :: Word16
+  , iBlocks :: Word32
+  , iFlags :: Word32
+  , iOsd1 :: Word32
+  , iBlock :: (Word32, Word32, Word32, Word32, Word32, Word32, Word32, Word32, Word32, Word32, Word32, Word32, Word32, Word32, Word32)
+  , iGeneration :: Word32
+  , iFileAcl :: Word32
+  , iDirAcl :: Word32
+  , iFaddr :: Word32
+  , iOsd2 :: BL.ByteString -- TODO: Use a more appropriate type here.
+  } deriving (Eq, Ord, Show)
+
+readInode :: Get Inode
+readInode =
+  Inode <$> getWord16le
+        <*> getWord16le
+        <*> getWord32le
+        <*> getWord32le
+        <*> getWord32le
+        <*> getWord32le
+        <*> getWord32le
+        <*> getWord16le
+        <*> getWord16le
+        <*> getWord32le
+        <*> getWord32le
+        <*> getWord32le
+        <*> liftA15 (,,,,,,,,,,,,,,)
+            getWord32le
+            getWord32le
+            getWord32le
+            getWord32le
+            getWord32le
+            getWord32le
+            getWord32le
+            getWord32le
+            getWord32le
+            getWord32le
+            getWord32le
+            getWord32le
+            getWord32le
+            getWord32le
+            getWord32le
+        <*> getWord32le
+        <*> getWord32le
+        <*> getWord32le
+        <*> getWord32le
+        <*> getLazyByteString 12
+  where
+    -- Holy hell, what could possibly go wrong?
+    liftA15 :: Applicative app =>
+               (a -> b -> c -> d -> e -> f -> g -> h -> i -> j -> k -> l -> m -> n -> o -> p)
+            -> app a
+            -> app b
+            -> app c
+            -> app d
+            -> app e
+            -> app f
+            -> app g
+            -> app h
+            -> app i
+            -> app j
+            -> app k
+            -> app l
+            -> app m
+            -> app n
+            -> app o
+            -> app p
+    liftA15 fn a b c d e f g h i j k l m n o =
+      fn <$> a
+         <*> b
+         <*> c
+         <*> d
+         <*> e
+         <*> f
+         <*> g
+         <*> h
+         <*> i
+         <*> j
+         <*> k
+         <*> l
+         <*> m
+         <*> n
+         <*> o
+
+readInodeTable :: Int -> Get [Inode]
+readInodeTable n = replicateM n readInode
+
+data Directory = Directory {
+    dInode :: Word32
+  , dRecLen :: Word16
+  , dNameLen :: Word8
+  , dFileType :: Word8
+  , dName :: BL.ByteString
+  } deriving (Eq, Ord, Show)
+
+readDirectory :: Get Directory
+readDirectory = do
+  inode <- getWord32le
+  recLen <- getWord16le
+  nameLen <- getWord8
+  fileType <- getWord8
+  name <- getLazyByteString (fromIntegral nameLen)
+  return $ Directory inode recLen nameLen fileType name
+
 -- | Get the number of block groups within the file system.
 blockGroupCount :: Superblock -> Int
 blockGroupCount sb =
@@ -194,3 +306,15 @@ getBGDT :: String -> IO BlockGroupDescriptorTable
 getBGDT fn = do
   input <- BL.readFile fn
   return $ runGet (skip 2048 >> readBlockGroupDescriptorTable) input
+
+-- | Parses all tables out.
+getAllTables :: String -> IO (Superblock, ExtendedSuperblock, BlockGroupDescriptorTable)
+getAllTables fn = do
+  input <- BL.readFile fn
+  return $ flip runGet input $ do
+    skip 1024 -- Boot record/data
+    sb <- readSuperblock
+    esb <- readExtendedSuperblock
+    skip 788
+    bgdt <- readBlockGroupDescriptorTable
+    return (sb, esb, bgdt)
