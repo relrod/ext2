@@ -109,24 +109,24 @@ readSuperblock = do
              <*> getWord16le
 
 data ExtendedSuperblock = ExtendedSuperblock {
-    sbFirstIno :: Word32
-  , sbInodeSize :: Word16
-  , sbBlockGroupNumber :: Word16
-  , sbFeatureCompat :: Word32
-  , sbFeatureIncompat :: Word32
-  , sbFeatureRoCompat :: Word32
-  , sbUuid :: BL.ByteString
-  , sbVolumeName :: BL.ByteString
-  , sbLastMounted :: BL.ByteString
-  , sbAlgoBitmap :: Word32
-  , sbPreallocBlocks :: Word8
+    sbFirstIno          :: Word32
+  , sbInodeSize         :: Word16
+  , sbBlockGroupNumber  :: Word16
+  , sbFeatureCompat     :: Word32
+  , sbFeatureIncompat   :: Word32
+  , sbFeatureRoCompat   :: Word32
+  , sbUuid              :: BL.ByteString
+  , sbVolumeName        :: BL.ByteString
+  , sbLastMounted       :: BL.ByteString
+  , sbAlgoBitmap        :: Word32
+  , sbPreallocBlocks    :: Word8
   , sbPreallocDirBlocks :: Word8
-  , sbUnusedAlignment :: Word16
-  , sbJournalUuid :: BL.ByteString
-  , sbJournalInum :: Word32
-  , sbJournalDev :: Word32
+  , sbUnusedAlignment   :: Word16
+  , sbJournalUuid       :: BL.ByteString
+  , sbJournalInum       :: Word32
+  , sbJournalDev        :: Word32
   , sbJournalLastOrphan :: Word32
-  , sbUnused :: BL.ByteString
+  , sbUnused            :: BL.ByteString
   } deriving (Eq, Ord, Show)
 
 readExtendedSuperblock :: Get ExtendedSuperblock
