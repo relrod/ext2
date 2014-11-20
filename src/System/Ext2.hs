@@ -141,7 +141,7 @@ makeLensesWith namespaceLensRules ''Superblock
 --
 -- See also 'readExtendedSuperblock'
 readSuperblock :: Get Superblock
-readSuperblock = do
+readSuperblock =
   Superblock <$> getWord32le
              <*> getWord32le
              <*> getWord32le
@@ -191,25 +191,24 @@ data ExtendedSuperblock = ExtendedSuperblock {
 makeLensesWith namespaceLensRules ''ExtendedSuperblock
 
 readExtendedSuperblock :: Get ExtendedSuperblock
-readExtendedSuperblock = do
-  let esb = ExtendedSuperblock <$> getWord32le
-                               <*> getWord16le
-                               <*> getWord16le
-                               <*> getWord32le
-                               <*> getWord32le
-                               <*> getWord32le
-                               <*> getLazyByteString 16
-                               <*> getLazyByteString 16
-                               <*> getLazyByteString 64
-                               <*> getWord32le
-                               <*> getWord8
-                               <*> getWord8
-                               <*> getWord16le
-                               <*> getLazyByteString 16
-                               <*> getWord32le
-                               <*> getWord32le
-                               <*> getWord32le
-  esb
+readExtendedSuperblock =
+  ExtendedSuperblock <$> getWord32le
+                     <*> getWord16le
+                     <*> getWord16le
+                     <*> getWord32le
+                     <*> getWord32le
+                     <*> getWord32le
+                     <*> getLazyByteString 16
+                     <*> getLazyByteString 16
+                     <*> getLazyByteString 64
+                     <*> getWord32le
+                     <*> getWord8
+                     <*> getWord8
+                     <*> getWord16le
+                     <*> getLazyByteString 16
+                     <*> getWord32le
+                     <*> getWord32le
+                     <*> getWord32le
 
 data BlockGroupDescriptorTable = BlockGroupDescriptorTable {
     bgBlockBitmap :: Word32
@@ -225,14 +224,13 @@ makeLensesWith namespaceLensRules ''BlockGroupDescriptorTable
 -- | Reads the block group descriptor table. The last 12 ("reserved") bytes are
 -- ignored and skipped over (consumed).
 readBlockGroupDescriptorTable :: Get BlockGroupDescriptorTable
-readBlockGroupDescriptorTable = do
-  let sb = BlockGroupDescriptorTable <$> getWord32le
-                                     <*> getWord32le
-                                     <*> getWord32le
-                                     <*> getWord16le
-                                     <*> getWord16le
-                                     <*> getWord16le
-  sb
+readBlockGroupDescriptorTable =
+  BlockGroupDescriptorTable <$> getWord32le
+                            <*> getWord32le
+                            <*> getWord32le
+                            <*> getWord16le
+                            <*> getWord16le
+                            <*> getWord16le
 
 data Inode = Inode {
     iMode :: Word16

@@ -1,4 +1,3 @@
-{-# LANGUAGE TemplateHaskell #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      : System.Ext2.Internal.LensHacks
