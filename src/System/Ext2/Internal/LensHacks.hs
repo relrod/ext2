@@ -26,7 +26,7 @@ namespaceLensRules = LensRules
   , _fieldToDef      = abbreviatedNamer
   }
 
--- | This is taken straight out of 'Control.Lens.TH' but but modified to give
+-- | This is taken straight out of 'Control.Lens.TH' but modified to give
 -- a 'TopName' back instead of a 'MethodName'. This means we can
 -- 'makeLensesWith'out classes using abbreviated fields.
 abbreviatedNamer :: Name -> [Name] -> Name -> [DefName]
