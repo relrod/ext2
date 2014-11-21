@@ -75,7 +75,6 @@ module System.Ext2 (
 
 import Control.Applicative
 import Control.Lens
-import Control.Monad
 import Data.Binary
 import Data.Binary.Get
 import Data.Bits
