@@ -377,10 +377,9 @@ getBGDT fn = do
   return $ runGet (skip 2048 >> readBlockGroupDescriptorTable) input
 
 -- | Parses all tables out.
-getAllTables :: String -> IO (Superblock, ExtendedSuperblock, BlockGroupDescriptorTable)
-getAllTables fn = do
-  input <- BL.readFile fn
-  return $ flip runGet input $ do
+getAllTables :: BL.ByteString -> (Superblock, ExtendedSuperblock, BlockGroupDescriptorTable)
+getAllTables input =
+  flip runGet input $ do
     skip 1024 -- Boot record/data
     sb <- readSuperblock
     esb <- readExtendedSuperblock
@@ -392,9 +391,10 @@ getAllTables fn = do
 listRootFiles :: String -> IO [BL.ByteString]
 listRootFiles fn = do
   input <- BL.readFile fn
+  let (sb, _, bgdt) = getAllTables input
   return $ flip runGet input $ do
-    skip (1024*8) -- TODO: Unhardcode Block 8
-    inodeTable' <- readInodeTable 1000 -- TODO: Unhardcode 1000
+    skip (byteFromBlock sb (bgdt ^. inodeTable . to fromIntegral))
+    inodeTable' <- readInodeTable (sb ^. inodesCount . to fromIntegral)
     let (Just root) = inodeTable' ^? ix 1 -- TODO: Totality
         (firstInode, _, _, _, _, _, _, _, _, _, _, _, _, _, _) = iBlock root
     readSoFar <- bytesRead
