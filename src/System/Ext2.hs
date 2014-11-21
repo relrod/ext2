@@ -79,6 +79,7 @@ import Data.Binary
 import Data.Binary.Get
 import Data.Bits
 import qualified Data.ByteString.Lazy.Char8 as BL
+import Debug.Trace
 import System.Ext2.Internal.LensHacks
 
 data Superblock = Superblock {
@@ -383,3 +384,27 @@ getAllTables fn = do
     skip 788
     bgdt <- readBlockGroupDescriptorTable
     return (sb, esb, bgdt)
+
+-- | Lists names of all files in the root directory.
+listRootFiles :: String -> IO [BL.ByteString]
+listRootFiles fn = do
+  input <- BL.readFile fn
+  return $ flip runGet input $ do
+    skip (1024*8) -- TODO: Unhardcode Block 8
+    inodeTable' <- readInodeTable 1000 -- TODO: Unhardcode 1000
+    let root = head (drop 1 . take 2 $ inodeTable') -- TODO: partial
+        (firstInode, _, _, _, _, _, _, _, _, _, _, _, _, _, _) = iBlock root
+    readSoFar <- bytesRead
+    skip ((1024 * fromIntegral firstInode) - fromIntegral readSoFar) -- Should be 0 in this special case.
+    rootDir <- readDirectory
+    skip 3
+    traverseDirs rootDir []
+  where
+    traverseDirs :: Directory -> [BL.ByteString] -> Get [BL.ByteString]
+    traverseDirs d prev =
+      if BL.null (d ^. name) && prev /= []
+      then return prev
+      else do
+        when (prev /= []) (skip 2) -- TODO: Unhardcode 2
+        newDir <- readDirectory
+        traverseDirs newDir ((d ^. name) : prev)
