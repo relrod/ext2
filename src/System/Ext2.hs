@@ -395,7 +395,7 @@ listRootFiles fn = do
   return $ flip runGet input $ do
     skip (1024*8) -- TODO: Unhardcode Block 8
     inodeTable' <- readInodeTable 1000 -- TODO: Unhardcode 1000
-    let (Just root) = inodeTable' ^? ix 2 -- TODO: Totality
+    let (Just root) = inodeTable' ^? ix 1 -- TODO: Totality
         (firstInode, _, _, _, _, _, _, _, _, _, _, _, _, _, _) = iBlock root
     readSoFar <- bytesRead
     skip ((1024 * fromIntegral firstInode) - fromIntegral readSoFar) -- Should be 0 in this special case.
