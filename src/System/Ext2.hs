@@ -81,6 +81,7 @@ import Data.Binary.Get
 import Data.Bits
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.List
+import qualified Data.Vector as V
 import System.Ext2.Internal.LensHacks
 
 data Superblock = Superblock {
@@ -329,8 +330,8 @@ readInode =
          <*> n
          <*> o
 
-readInodeTable :: Int -> Get [Inode]
-readInodeTable n = replicateM n readInode
+readInodeTable :: Int -> Get (V.Vector Inode)
+readInodeTable n = V.replicateM n readInode
 
 data Directory = Directory {
     dInode :: Word32
@@ -395,7 +396,7 @@ listRootFiles fn = do
   return $ flip runGet input $ do
     skip (1024*8) -- TODO: Unhardcode Block 8
     inodeTable' <- readInodeTable 1000 -- TODO: Unhardcode 1000
-    let root = head (drop 1 . take 2 $ inodeTable') -- TODO: partial
+    let (Just root) = inodeTable' ^? ix 2 -- TODO: Totality
         (firstInode, _, _, _, _, _, _, _, _, _, _, _, _, _, _) = iBlock root
     readSoFar <- bytesRead
     skip ((1024 * fromIntegral firstInode) - fromIntegral readSoFar) -- Should be 0 in this special case.
