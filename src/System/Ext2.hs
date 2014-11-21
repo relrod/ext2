@@ -57,7 +57,7 @@ module System.Ext2 (
     -- * Directory
   , Directory (..)
     -- ** Lenses
-  , recLen, nameLen, name, inode, fileType
+  , recLen, nameLen, name, inode, fileType, padding
     -- ** Parsers
   , readDirectory
 
@@ -69,6 +69,7 @@ module System.Ext2 (
   , getSuperblock
   , getBGDT
   , getAllTables
+  , listRootFiles
 
   ) where
 
@@ -79,7 +80,7 @@ import Data.Binary
 import Data.Binary.Get
 import Data.Bits
 import qualified Data.ByteString.Lazy.Char8 as BL
-import Debug.Trace
+import Data.List
 import System.Ext2.Internal.LensHacks
 
 data Superblock = Superblock {
@@ -337,6 +338,7 @@ data Directory = Directory {
   , dNameLen :: Word8
   , dFileType :: Word8
   , dName :: BL.ByteString
+  , dPadding :: BL.ByteString
   } deriving (Eq, Ord, Show)
 
 makeLensesWith namespaceLensRules ''Directory
@@ -348,7 +350,8 @@ readDirectory = do
   nameLen' <- getWord8
   fileType' <- getWord8
   name' <- getLazyByteString (fromIntegral nameLen')
-  return $ Directory inode' recLen' nameLen' fileType' name'
+  padding' <- getLazyByteString 3
+  return $ Directory inode' recLen' nameLen' fileType' name' padding'
 
 -- | Get the number of block groups within the file system.
 blockGroupCount :: Superblock -> Int
@@ -397,14 +400,14 @@ listRootFiles fn = do
     readSoFar <- bytesRead
     skip ((1024 * fromIntegral firstInode) - fromIntegral readSoFar) -- Should be 0 in this special case.
     rootDir <- readDirectory
-    skip 3
-    traverseDirs rootDir []
+    traverseDirs input rootDir [] (fromIntegral $ rootDir ^. recLen)
   where
-    traverseDirs :: Directory -> [BL.ByteString] -> Get [BL.ByteString]
-    traverseDirs d prev =
-      if BL.null (d ^. name) && prev /= []
-      then return prev
+    traverseDirs :: BL.ByteString -> Directory -> [BL.ByteString] -> Int -> Get [BL.ByteString]
+    traverseDirs input d prev skipBytes =
+      if BL.null (d ^. name) && (not . null $ prev)
+      then return (sort . nub $ prev)
       else do
-        when (prev /= []) (skip 2) -- TODO: Unhardcode 2
-        newDir <- readDirectory
-        traverseDirs newDir ((d ^. name) : prev)
+        let next = flip runGet input $ do
+              skip (136192 + skipBytes)
+              readDirectory
+        traverseDirs input next ((d ^. name) : prev) (skipBytes + fromIntegral (next ^. recLen))
