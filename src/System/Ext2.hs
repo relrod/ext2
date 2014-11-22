@@ -294,40 +294,9 @@ readInode =
         <*> getLazyByteString 12
   where
     -- Holy hell, what could possibly go wrong?
-    liftA15 :: Applicative app =>
-               (a -> b -> c -> d -> e -> f -> g -> h -> i -> j -> k -> l -> m -> n -> o -> p)
-            -> app a
-            -> app b
-            -> app c
-            -> app d
-            -> app e
-            -> app f
-            -> app g
-            -> app h
-            -> app i
-            -> app j
-            -> app k
-            -> app l
-            -> app m
-            -> app n
-            -> app o
-            -> app p
     liftA15 fn a b c d e f g h i j k l m n o =
-      fn <$> a
-         <*> b
-         <*> c
-         <*> d
-         <*> e
-         <*> f
-         <*> g
-         <*> h
-         <*> i
-         <*> j
-         <*> k
-         <*> l
-         <*> m
-         <*> n
-         <*> o
+      fn <$> a <*> b <*> c <*> d <*> e <*> f <*> g <*> h <*> i <*> j <*> k <*> l
+         <*> m <*> n <*> o
 
 readInodeTable :: Int -> Get (V.Vector Inode)
 readInodeTable n = V.replicateM n readInode
