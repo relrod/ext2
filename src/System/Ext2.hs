@@ -75,9 +75,9 @@ module System.Ext2 (
 
 import Control.Applicative
 import Control.Lens
-import Data.Binary
-import Data.Binary.Get
+import Data.Bytes.Get
 import Data.Bits
+import Data.Word
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.List
 import qualified Data.Vector as V
@@ -142,7 +142,7 @@ makeLensesWith namespaceLensRules ''Superblock
 -- the first 1024 bytes to where the superblock lives.
 --
 -- See also 'readExtendedSuperblock'
-readSuperblock :: Get Superblock
+readSuperblock :: MonadGet m => m Superblock
 readSuperblock =
   Superblock <$> getWord32le
              <*> getWord32le
@@ -192,7 +192,7 @@ data ExtendedSuperblock = ExtendedSuperblock {
 
 makeLensesWith namespaceLensRules ''ExtendedSuperblock
 
-readExtendedSuperblock :: Get ExtendedSuperblock
+readExtendedSuperblock :: MonadGet m => m ExtendedSuperblock
 readExtendedSuperblock =
   ExtendedSuperblock <$> getWord32le
                      <*> getWord16le
@@ -225,7 +225,7 @@ makeLensesWith namespaceLensRules ''BlockGroupDescriptorTable
 
 -- | Reads the block group descriptor table. The last 12 ("reserved") bytes are
 -- ignored and skipped over (consumed).
-readBlockGroupDescriptorTable :: Get BlockGroupDescriptorTable
+readBlockGroupDescriptorTable :: MonadGet m => m BlockGroupDescriptorTable
 readBlockGroupDescriptorTable =
   BlockGroupDescriptorTable <$> getWord32le
                             <*> getWord32le
@@ -257,7 +257,7 @@ data Inode = Inode {
 
 makeLensesWith namespaceLensRules ''Inode
 
-readInode :: Get Inode
+readInode :: MonadGet m => m Inode
 readInode =
   Inode <$> getWord16le
         <*> getWord16le
@@ -298,7 +298,7 @@ readInode =
       fn <$> a <*> b <*> c <*> d <*> e <*> f <*> g <*> h <*> i <*> j <*> k <*> l
          <*> m <*> n <*> o
 
-readInodeTable :: Int -> Get (V.Vector Inode)
+readInodeTable :: MonadGet m => Int ->  m (V.Vector Inode)
 readInodeTable n = V.replicateM n readInode
 
 data Directory = Directory {
@@ -312,7 +312,7 @@ data Directory = Directory {
 
 makeLensesWith namespaceLensRules ''Directory
 
-readDirectory :: Get Directory
+readDirectory :: MonadGet m => m Directory
 readDirectory = do
   inode' <- getWord32le
   recLen' <- getWord16le
@@ -337,52 +337,48 @@ byteFromBlock sb x = x * (1024 `shiftL` fromIntegral (sbLogBlockSize sb))
 getSuperblock :: String -> IO Superblock
 getSuperblock fn = do
   input <- BL.readFile fn
-  return $ runGet (skip 1024 >> readSuperblock) input
+  return $ runGetL (skip 1024 >> readSuperblock) input
 
 -- | Open an ext2 filesystem and parse out the 'BlockGroupDescriptorTable'.
 getBGDT :: String -> IO BlockGroupDescriptorTable
 getBGDT fn = do
   input <- BL.readFile fn
-  return $ runGet (skip 2048 >> readBlockGroupDescriptorTable) input
+  return $ runGetL (skip 2048 >> readBlockGroupDescriptorTable) input
 
 getInodeTableAtBlock :: BL.ByteString -> Int -> V.Vector Inode
 getInodeTableAtBlock input blockNumber =
-  let sb = runGet (skip 1024 >> readSuperblock) input
-  in flip runGet input $ do
+  let sb = runGetL (skip 1024 >> readSuperblock) input
+  in flip runGetL input $ do
        skip (byteFromBlock sb blockNumber)
        readInodeTable (sb ^. inodesCount . to fromIntegral)
 
 -- | Parses all tables out.
-getAllTables :: BL.ByteString -> (Superblock, ExtendedSuperblock, BlockGroupDescriptorTable)
+getAllTables :: BL.ByteString -> (Superblock, ExtendedSuperblock, BlockGroupDescriptorTable, V.Vector Inode)
 getAllTables input =
-  flip runGet input $ do
+  flip runGetL input $ do
     skip 1024 -- Boot record/data
     sb <- readSuperblock
     esb <- readExtendedSuperblock
     skip 788
     bgdt <- readBlockGroupDescriptorTable
-    return (sb, esb, bgdt)
+    let inodes = getInodeTableAtBlock input (bgdt ^. inodeTable . to fromIntegral)
+    return (sb, esb, bgdt, inodes)
 
 -- | Lists names of all files in the root directory.
 listRootFiles :: String -> IO [BL.ByteString]
 listRootFiles fn = do
   input <- BL.readFile fn
-  let (_, _, bgdt) = getAllTables input
-      inodeTable' = getInodeTableAtBlock input (bgdt ^. inodeTable . to fromIntegral)
-  return $ flip runGet input $ do
-    let (Just root) = inodeTable' ^? ix 1 -- TODO: Totality
-        (firstInode, _, _, _, _, _, _, _, _, _, _, _, _, _, _) = iBlock root
-    readSoFar <- bytesRead
-    skip ((1024 * fromIntegral firstInode) - fromIntegral readSoFar) -- Should be 0 in this special case.
+  return $ flip runGetL input $ do
+    skip 136192 -- TODO: Unhardcode
     rootDir <- readDirectory
     traverseDirs input rootDir [] (fromIntegral $ rootDir ^. recLen)
   where
-    traverseDirs :: BL.ByteString -> Directory -> [BL.ByteString] -> Int -> Get [BL.ByteString]
+    traverseDirs :: MonadGet m => BL.ByteString -> Directory -> [BL.ByteString] -> Int -> m [BL.ByteString]
     traverseDirs input d prev skipBytes =
       if BL.null (d ^. name) && (not . null $ prev)
-      then return (sort . nub $ prev)
+      then return (sort . nub $ prev)  -- TODO: Why do we have to nub here?
       else do
-        let next = flip runGet input $ do
+        let next = flip runGetL input $ do
               skip (136192 + skipBytes)
               readDirectory
         traverseDirs input next ((d ^. name) : prev) (skipBytes + fromIntegral (next ^. recLen))
