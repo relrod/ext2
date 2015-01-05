@@ -17,14 +17,7 @@ import Control.Lens.Internal.FieldTH
 import Language.Haskell.TH
 
 namespaceLensRules :: LensRules
-namespaceLensRules = LensRules
-  { _simpleLenses    = False
-  , _generateSigs    = True
-  , _generateClasses = False
-  , _allowIsos       = True
-  , _classyLenses    = const Nothing
-  , _fieldToDef      = abbreviatedNamer
-  }
+namespaceLensRules = lensRules { _fieldToDef = abbreviatedNamer }
 
 -- | This is taken straight out of 'Control.Lens.TH' but modified to give
 -- a 'TopName' back instead of a 'MethodName'. This means we can
