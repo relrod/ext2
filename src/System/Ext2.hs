@@ -6,7 +6,7 @@
 -- License     : BSD2 (see LICENSE file)
 -- Maintainer  : Ricky Elrod <ricky@elrod.me>
 -- Stability   : experimental
--- Portability : portable
+-- Portability : lens
 --
 -- This library exists for me to learn about ext2 and to possibly be used as
 -- part of an assignment in a Computer Science course I will be taking soon.
