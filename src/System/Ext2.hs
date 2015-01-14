@@ -226,18 +226,14 @@ readSuperblock =
              <*> getWord32le
              <*> getWord32le
              <*> getWord32le
-             <*> liftA4 (,,,)
-                 getWord32le
-                 getWord32le
-                 getWord32le
-                 getWord32le
+             <*> ((,,,)
+                  <$> getWord32le
+                  <*> getWord32le
+                  <*> getWord32le
+                  <*> getWord32le)
              <*> getWord8
              <*> getWord32le
              <*> getWord32le
-  where
-    liftA4 fn a b c d =
-      fn <$> a <*> b <*> c <*> d
-
 
 data BlockGroupDescriptorTable = BlockGroupDescriptorTable {
     bgBlockBitmap :: Word32
@@ -298,32 +294,27 @@ readInode =
         <*> getWord32le
         <*> getWord32le
         <*> getWord32le
-        <*> liftA15 (,,,,,,,,,,,,,,)
-            getWord32le
-            getWord32le
-            getWord32le
-            getWord32le
-            getWord32le
-            getWord32le
-            getWord32le
-            getWord32le
-            getWord32le
-            getWord32le
-            getWord32le
-            getWord32le
-            getWord32le
-            getWord32le
-            getWord32le
+        <*> ((,,,,,,,,,,,,,,)
+             <$> getWord32le
+             <*> getWord32le
+             <*> getWord32le
+             <*> getWord32le
+             <*> getWord32le
+             <*> getWord32le
+             <*> getWord32le
+             <*> getWord32le
+             <*> getWord32le
+             <*> getWord32le
+             <*> getWord32le
+             <*> getWord32le
+             <*> getWord32le
+             <*> getWord32le
+             <*> getWord32le)
         <*> getWord32le
         <*> getWord32le
         <*> getWord32le
         <*> getWord32le
         <*> getLazyByteString 12
-  where
-    -- Holy hell, what could possibly go wrong?
-    liftA15 fn a b c d e f g h i j k l m n o =
-      fn <$> a <*> b <*> c <*> d <*> e <*> f <*> g <*> h <*> i <*> j <*> k <*> l
-         <*> m <*> n <*> o
 
 readInodeTable :: MonadGet m => Int ->  m (V.Vector Inode)
 readInodeTable n = V.replicateM n readInode
