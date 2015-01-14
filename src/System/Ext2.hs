@@ -23,19 +23,17 @@ module System.Ext2 (
   , magic, mTime, logFragSize, logBlockSize, lastCheck, inodesPerGroup
   , inodesCount, freeInodesCount, freeBlocksCount, fragsPerGroup, firstDataBlock
   , errors, defResuid, defResgid, creatorOs, checkInterval, blocksPerGroup
-  , blocksCount
+  , blocksCount, volumeName, uuid, unusedAlignment, preallocDirBlocks
+  , preallocBlocks, lastMounted, journalUuid, journalLastOrphan, journalInum
+  , journalDev, inodeSize, firstIno, featureRoCompat, featureIncompat
+  , featureCompat, blockGroupNumber, algoBitmap, defaultMountOptions
+  , defHashVersion, firstMetaBg, hashSeed
+
     -- ** Parsers
   , readSuperblock
 
-    -- * ExtendedSuperblock
-  , ExtendedSuperblock (..)
     -- ** Lenses
-  , volumeName, uuid, unusedAlignment, preallocDirBlocks, preallocBlocks
-  , lastMounted, journalUuid, journalLastOrphan, journalInum, journalDev
-  , inodeSize, firstIno, featureRoCompat, featureIncompat, featureCompat
-  , blockGroupNumber, algoBitmap
-    -- ** Parsers
-  , readExtendedSuperblock
+
 
     -- * BlockGroupDescriptorTable
   , BlockGroupDescriptorTable (..)
@@ -84,56 +82,98 @@ import qualified Data.Vector as V
 import System.Ext2.Internal.LensHacks
 
 data Superblock = Superblock {
-    sbInodesCount     :: Word32
+    sbInodesCount       :: Word32
     -- ^ Total number of inodes in the file system
-  , sbBlocksCount     :: Word32
+  , sbBlocksCount       :: Word32
     -- ^ Total number of blocks in the file system
-  , sbRBlocksCount    :: Word32
+  , sbRBlocksCount      :: Word32
     -- ^ Number of blocks reserved for the superuser
-  , sbFreeBlocksCount :: Word32
+  , sbFreeBlocksCount   :: Word32
     -- ^ Number of unallocated blocks
-  , sbFreeInodesCount :: Word32
+  , sbFreeInodesCount   :: Word32
     -- ^ Number of unallocated inodes
-  , sbFirstDataBlock  :: Word32
+  , sbFirstDataBlock    :: Word32
     -- ^ Block number of the block containing the superblock
-  , sbLogBlockSize    :: Word32
+  , sbLogBlockSize      :: Word32
     -- ^ log2(block size) - 10
-  , sbLogFragSize     :: Word32
+  , sbLogFragSize       :: Word32
     -- ^ log2(fragment size) - 10
-  , sbBlocksPerGroup  :: Word32
+  , sbBlocksPerGroup    :: Word32
     -- ^ Number of blocks in each group
-  , sbFragsPerGroup   :: Word32
+  , sbFragsPerGroup     :: Word32
     -- ^ Number of gragments in each group
-  , sbInodesPerGroup  :: Word32
+  , sbInodesPerGroup    :: Word32
     -- ^ Number of inodes in each group
-  , sbMTime           :: Word32
+  , sbMTime             :: Word32
     -- ^ Last mount time
-  , sbWTime           :: Word32
+  , sbWTime             :: Word32
     -- ^ Last write time
-  , sbMntCount        :: Word16
+  , sbMntCount          :: Word16
     -- ^ Number of mounts since last consistency check
-  , sbMaxMntCount     :: Word16
+  , sbMaxMntCount       :: Word16
     -- ^ Number of allowed mounts before requiring a consistency check
-  , sbMagic           :: Word16
+  , sbMagic             :: Word16
     -- ^ ext2 signature: @0xef53@
-  , sbState           :: Word16
+  , sbState             :: Word16
     -- ^ Filesystem state
-  , sbErrors          :: Word16
+  , sbErrors            :: Word16
     -- ^ What to do on an error condition
-  , sbMinorRevLevel   :: Word16
+  , sbMinorRevLevel     :: Word16
     -- ^ Minor portion of version
-  , sbLastCheck       :: Word32
+  , sbLastCheck         :: Word32
     -- ^ Time of last consistency check
-  , sbCheckInterval   :: Word32
+  , sbCheckInterval     :: Word32
     -- ^ Interval between forced consistency checks
-  , sbCreatorOs       :: Word32
+  , sbCreatorOs         :: Word32
     -- ^ Operating system ID
-  , sbRevLevel        :: Word32
+  , sbRevLevel          :: Word32
     -- ^ Major portion of version
-  , sbDefResuid       :: Word16
+  , sbDefResuid         :: Word16
     -- ^ User ID that can use reserved blocks
-  , sbDefResgid       :: Word16
+  , sbDefResgid         :: Word16
     -- ^ Group ID that can use reserved blocks
+  , sbFirstIno          :: Word32
+    -- ^ First non-reserved inode
+  , sbInodeSize         :: Word16
+    -- ^ Size of each inode structure
+  , sbBlockGroupNumber  :: Word16
+    -- ^ Block group of this particular superblock (if it is a copy)
+  , sbFeatureCompat     :: Word32
+    -- ^ Optional features present
+  , sbFeatureIncompat   :: Word32
+    -- ^ Required features present
+  , sbFeatureRoCompat   :: Word32
+    -- ^ Features which, if not present, force read-only mounting
+  , sbUuid              :: BL.ByteString
+    -- ^ File system UUID
+  , sbVolumeName        :: BL.ByteString
+    -- ^ Volume name
+  , sbLastMounted       :: BL.ByteString
+    -- ^ Last mounted path
+  , sbAlgoBitmap        :: Word32
+    -- ^ Compression algorithms used
+  , sbPreallocBlocks    :: Word8
+    -- ^ Number of blocks to pre-allocate for files
+  , sbPreallocDirBlocks :: Word8
+    -- ^ Number of blocks to pre-allocate for directories
+  , sbUnusedAlignment   :: Word16
+    -- ^ UNUSED
+  , sbJournalUuid       :: BL.ByteString
+    -- ^ Journal UUID
+  , sbJournalInum       :: Word32
+    -- ^ Journal inode
+  , sbJournalDev        :: Word32
+    -- ^ Journal device
+  , sbJournalLastOrphan :: Word32
+    -- ^ Head of orphan inode list
+  , sbHashSeed          :: (Word32, Word32, Word32, Word32)
+    -- ^ Seeds for hashing algorithm for directory indexing
+  , sbDefHashVersion    :: Word8
+    -- ^ Default hash version used for directory indexing
+  , sbDefaultMountOptions :: Word32
+    -- ^ Default mount options for the filesystem
+  , sbFirstMetaBg       :: Word32
+    -- ^ Block group ID of the first meta block group
   } deriving (Eq, Ord, Show)
 
 makeLensesWith namespaceLensRules ''Superblock
@@ -169,48 +209,35 @@ readSuperblock =
              <*> getWord32le
              <*> getWord16le
              <*> getWord16le
+             <*> getWord32le
+             <*> getWord16le
+             <*> getWord16le
+             <*> getWord32le
+             <*> getWord32le
+             <*> getWord32le
+             <*> getLazyByteString 16
+             <*> getLazyByteString 16
+             <*> getLazyByteString 64
+             <*> getWord32le
+             <*> getWord8
+             <*> getWord8
+             <*> getWord16le
+             <*> getLazyByteString 16
+             <*> getWord32le
+             <*> getWord32le
+             <*> getWord32le
+             <*> liftA4 (,,,)
+                 getWord32le
+                 getWord32le
+                 getWord32le
+                 getWord32le
+             <*> getWord8
+             <*> getWord32le
+             <*> getWord32le
+  where
+    liftA4 fn a b c d =
+      fn <$> a <*> b <*> c <*> d
 
-data ExtendedSuperblock = ExtendedSuperblock {
-    sbFirstIno          :: Word32
-  , sbInodeSize         :: Word16
-  , sbBlockGroupNumber  :: Word16
-  , sbFeatureCompat     :: Word32
-  , sbFeatureIncompat   :: Word32
-  , sbFeatureRoCompat   :: Word32
-  , sbUuid              :: BL.ByteString
-  , sbVolumeName        :: BL.ByteString
-  , sbLastMounted       :: BL.ByteString
-  , sbAlgoBitmap        :: Word32
-  , sbPreallocBlocks    :: Word8
-  , sbPreallocDirBlocks :: Word8
-  , sbUnusedAlignment   :: Word16
-  , sbJournalUuid       :: BL.ByteString
-  , sbJournalInum       :: Word32
-  , sbJournalDev        :: Word32
-  , sbJournalLastOrphan :: Word32
-  } deriving (Eq, Ord, Show)
-
-makeLensesWith namespaceLensRules ''ExtendedSuperblock
-
-readExtendedSuperblock :: MonadGet m => m ExtendedSuperblock
-readExtendedSuperblock =
-  ExtendedSuperblock <$> getWord32le
-                     <*> getWord16le
-                     <*> getWord16le
-                     <*> getWord32le
-                     <*> getWord32le
-                     <*> getWord32le
-                     <*> getLazyByteString 16
-                     <*> getLazyByteString 16
-                     <*> getLazyByteString 64
-                     <*> getWord32le
-                     <*> getWord8
-                     <*> getWord8
-                     <*> getWord16le
-                     <*> getLazyByteString 16
-                     <*> getWord32le
-                     <*> getWord32le
-                     <*> getWord32le
 
 data BlockGroupDescriptorTable = BlockGroupDescriptorTable {
     bgBlockBitmap :: Word32
@@ -353,16 +380,15 @@ getInodeTableAtBlock input blockNumber =
        readInodeTable (sb ^. inodesCount . to fromIntegral)
 
 -- | Parses all tables out.
-getAllTables :: BL.ByteString -> (Superblock, ExtendedSuperblock, BlockGroupDescriptorTable, V.Vector Inode)
+getAllTables :: BL.ByteString -> (Superblock, BlockGroupDescriptorTable, V.Vector Inode)
 getAllTables input =
   flip runGetL input $ do
     skip 1024 -- Boot record/data
     sb <- readSuperblock
-    esb <- readExtendedSuperblock
     skip 788
     bgdt <- readBlockGroupDescriptorTable
     let inodes = getInodeTableAtBlock input (bgdt ^. inodeTable . to fromIntegral)
-    return (sb, esb, bgdt, inodes)
+    return (sb, bgdt, inodes)
 
 -- | Lists names of all files in the root directory.
 listRootFiles :: String -> IO [BL.ByteString]
