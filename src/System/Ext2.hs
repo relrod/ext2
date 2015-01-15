@@ -28,12 +28,8 @@ module System.Ext2 (
   , journalDev, inodeSize, firstIno, featureRoCompat, featureIncompat
   , featureCompat, blockGroupNumber, algoBitmap, defaultMountOptions
   , defHashVersion, firstMetaBg, hashSeed
-
     -- ** Parsers
   , readSuperblock
-
-    -- ** Lenses
-
 
     -- * BlockGroupDescriptorTable
   , BlockGroupDescriptorTable (..)
