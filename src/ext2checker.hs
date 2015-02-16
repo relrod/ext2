@@ -17,11 +17,11 @@ main = do
     error "Usage: ext2checker <path to ext2 filesystem>"
   fs <- BL.readFile (head args)
   let s = flip runGetL fs $ skip 1024 >> readSuperblock
-  putStrLn $  "FS Size: " ++ show (fsSize s) ++ "MB"
+  putStrLn $  "FS Size: " ++ show (fsSize s) ++ " Bytes"
 
   where
     fsSize :: Superblock -> Double
     fsSize s =
       fromIntegral
       ((s ^. blocksCount) *
-       (1024 `shiftL` (fromIntegral (s ^. logBlockSize)))) / 1024 / 1024
+       (1024 `shiftL` (fromIntegral (s ^. logBlockSize))))
