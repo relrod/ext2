@@ -8,6 +8,7 @@ import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.Bytes.Get
 import System.Ext2
 import System.Ext2.FSChecks
+import System.Ext2.Lens
 import System.Environment
 
 main :: IO ()
