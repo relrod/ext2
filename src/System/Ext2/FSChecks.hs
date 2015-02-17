@@ -18,6 +18,7 @@ module System.Ext2.FSChecks (
 
 import Control.Lens
 import System.Ext2
+import System.Ext2.Lens
 
 -- | Given a superblock, ensure that its magic number is as-expected.
 sbMagicValid :: Superblock -> Bool
