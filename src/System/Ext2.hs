@@ -1,4 +1,3 @@
-{-# LANGUAGE TemplateHaskell #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      : System.Ext2
@@ -18,64 +17,31 @@
 module System.Ext2 (
     -- * Superblock
     Superblock (..)
-    -- ** Lenses
-  , wTime, state, revLevel, rBlocksCount, mntCount, minorRevLevel, maxMntCount
-  , magic, mTime, logFragSize, logBlockSize, lastCheck, inodesPerGroup
-  , inodesCount, freeInodesCount, freeBlocksCount, fragsPerGroup, firstDataBlock
-  , errors, defResuid, defResgid, creatorOs, checkInterval, blocksPerGroup
-  , blocksCount, volumeName, uuid, unusedAlignment, preallocDirBlocks
-  , preallocBlocks, lastMounted, journalUuid, journalLastOrphan, journalInum
-  , journalDev, inodeSize, firstIno, featureRoCompat, featureIncompat
-  , featureCompat, blockGroupNumber, algoBitmap, defaultMountOptions
-  , defHashVersion, firstMetaBg, hashSeed
     -- ** Parsers
   , readSuperblock
 
     -- * BlockGroupDescriptorTable
   , BlockGroupDescriptorTable (..)
-    -- ** Lenses
-  , usedDirsCount, inodeTable, inodeBitmap, freeInodesCountBg, freeBlocksCountBg
-  , blockBitmap
     -- ** Parsers
   , readBlockGroupDescriptorTable
 
     -- * Inode
   , Inode (..)
-    -- ** Lenses
-  , uid, size, osd2, osd1, mtime, mode, linksCount, gid, generation, flags
-  , fileAcl, faddr, dtime, dirAcl, ctime, blocks, block, atime
     -- ** Parsers
   , readInode
   , readInodeTable
 
     -- * Directory
   , Directory (..)
-    -- ** Lenses
-  , recLen, nameLen, name, inode, fileType, padding
     -- ** Parsers
   , readDirectory
-
-    -- * Utility functions
-  , blockGroupCount
-  , byteFromBlock
-
-    -- * Silly test/helper functions
-  , getSuperblock
-  , getBGDT
-  , getAllTables
-  , listRootFiles
-
   ) where
 
 import Control.Applicative
-import Control.Lens
 import Data.Bytes.Get
-import Data.Bits
 import Data.Word
 import qualified Data.ByteString.Lazy.Char8 as BL
-import Data.List
 import qualified Data.Vector as V
-import System.Ext2.Internal.LensHacks
 
 data Superblock = Superblock {
     sbInodesCount       :: Word32
@@ -172,8 +138,6 @@ data Superblock = Superblock {
     -- ^ Block group ID of the first meta block group
   } deriving (Eq, Ord, Show)
 
-makeLensesWith namespaceLensRules ''Superblock
-
 -- | Reads the superblock information from an ext2 filesystem. __Does not__ skip
 -- the first 1024 bytes to where the superblock lives.
 --
@@ -240,8 +204,6 @@ data BlockGroupDescriptorTable = BlockGroupDescriptorTable {
   , bgUsedDirsCount   :: Word16
   } deriving (Eq, Ord, Show)
 
-makeLensesWith namespaceLensRules ''BlockGroupDescriptorTable
-
 -- | Reads the block group descriptor table. The last 12 ("reserved") bytes are
 -- ignored and skipped over (consumed).
 readBlockGroupDescriptorTable :: MonadGet m => m BlockGroupDescriptorTable
@@ -273,8 +235,6 @@ data Inode = Inode {
   , iFaddr :: Word32
   , iOsd2 :: BL.ByteString -- TODO: Use a more appropriate type here.
   } deriving (Eq, Ord, Show)
-
-makeLensesWith namespaceLensRules ''Inode
 
 readInode :: MonadGet m => m Inode
 readInode =
@@ -324,8 +284,6 @@ data Directory = Directory {
   , dPadding :: BL.ByteString
   } deriving (Eq, Ord, Show)
 
-makeLensesWith namespaceLensRules ''Directory
-
 readDirectory :: MonadGet m => m Directory
 readDirectory = do
   inode' <- getWord32le
@@ -335,63 +293,3 @@ readDirectory = do
   name' <- getLazyByteString (fromIntegral nameLen')
   padding' <- getLazyByteString 3
   return $ Directory inode' recLen' nameLen' fileType' name' padding'
-
--- | Get the number of block groups within the file system.
-blockGroupCount :: Superblock -> Int
-blockGroupCount sb =
-  ceiling $
-    (fromIntegral (sbBlocksCount sb) :: Double) / fromIntegral (sbBlocksPerGroup sb)
-
--- | Given a 'Superblock', and the block number, get the byte number at which
--- it starts.
-byteFromBlock :: Superblock -> Int -> Int
-byteFromBlock sb x = x * (1024 `shiftL` fromIntegral (sbLogBlockSize sb))
-
--- | Open an ext2 filesystem and parse out the 'Superblock'.
-getSuperblock :: String -> IO Superblock
-getSuperblock fn = do
-  input <- BL.readFile fn
-  return $ runGetL (skip 1024 >> readSuperblock) input
-
--- | Open an ext2 filesystem and parse out the 'BlockGroupDescriptorTable'.
-getBGDT :: String -> IO BlockGroupDescriptorTable
-getBGDT fn = do
-  input <- BL.readFile fn
-  return $ runGetL (skip 2048 >> readBlockGroupDescriptorTable) input
-
-getInodeTableAtBlock :: BL.ByteString -> Int -> V.Vector Inode
-getInodeTableAtBlock input blockNumber =
-  let sb = runGetL (skip 1024 >> readSuperblock) input
-  in flip runGetL input $ do
-       skip (byteFromBlock sb blockNumber)
-       readInodeTable (sb ^. inodesCount . to fromIntegral)
-
--- | Parses all tables out.
-getAllTables :: BL.ByteString -> (Superblock, BlockGroupDescriptorTable, V.Vector Inode)
-getAllTables input =
-  flip runGetL input $ do
-    skip 1024 -- Boot record/data
-    sb <- readSuperblock
-    skip 788
-    bgdt <- readBlockGroupDescriptorTable
-    let inodes = getInodeTableAtBlock input (bgdt ^. inodeTable . to fromIntegral)
-    return (sb, bgdt, inodes)
-
--- | Lists names of all files in the root directory.
-listRootFiles :: String -> IO [BL.ByteString]
-listRootFiles fn = do
-  input <- BL.readFile fn
-  return $ flip runGetL input $ do
-    skip 136192 -- TODO: Unhardcode
-    rootDir <- readDirectory
-    traverseDirs input rootDir [] (fromIntegral $ rootDir ^. recLen)
-  where
-    traverseDirs :: MonadGet m => BL.ByteString -> Directory -> [BL.ByteString] -> Int -> m [BL.ByteString]
-    traverseDirs input d prev skipBytes =
-      if BL.null (d ^. name) && (not . null $ prev)
-      then return (sort . nub $ prev)  -- TODO: Why do we have to nub here?
-      else do
-        let next = flip runGetL input $ do
-              skip (136192 + skipBytes)
-              readDirectory
-        traverseDirs input next ((d ^. name) : prev) (skipBytes + fromIntegral (next ^. recLen))
