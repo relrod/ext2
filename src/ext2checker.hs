@@ -19,10 +19,17 @@ main = do
   fs <- BL.readFile (head args)
   let s = flip runGetL fs $ skip 1024 >> readSuperblock
   putStrLn $  "FS Size: " ++ show (fsSize s) ++ " Bytes"
+  putStrLn $  "Unallocated: " ++ show (unallocated s) ++ " Bytes"
 
   where
     fsSize :: Superblock -> Double
     fsSize s =
       fromIntegral
       ((s ^. blocksCount) *
+       (1024 `shiftL` (fromIntegral (s ^. logBlockSize))))
+
+    unallocated :: Superblock -> Double
+    unallocated s =
+      fromIntegral
+      ((s ^. freeBlocksCount) *
        (1024 `shiftL` (fromIntegral (s ^. logBlockSize))))
