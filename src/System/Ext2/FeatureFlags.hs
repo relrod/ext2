@@ -12,12 +12,9 @@
 ----------------------------------------------------------------------------
 module System.Ext2.FeatureFlags where
 
-import Control.Lens
 import Data.Bits ((.&.))
 import Data.Maybe (fromJust)
 import Data.Tuple (swap)
-import System.Ext2.Tables
-import System.Ext2.Lens
 
 data OptionalFeatureFlag = DirPrealloc
                          | AFSInodes
@@ -41,9 +38,12 @@ instance Enum OptionalFeatureFlag where
   fromEnum = fromJust . flip lookup optionalFeatureFlagTable
   toEnum = fromJust . flip lookup (map swap optionalFeatureFlagTable)
 
-hasOptionalFlag :: Superblock -> OptionalFeatureFlag -> Bool
-hasOptionalFlag sb o =
-  sb ^. featureCompat .&. (fromIntegral . fromEnum $ o) == 1
+hasOptionalFlag :: Int -> OptionalFeatureFlag -> Bool
+hasOptionalFlag given o = given .&. (fromIntegral . fromEnum $ o) /= 0
+
+listOptionalFlags :: Int -> [OptionalFeatureFlag]
+listOptionalFlags given =
+  filter (hasOptionalFlag given) (map fst optionalFeatureFlagTable)
 
 -- | Read-only feature flags
 data ROFeatureFlag = SparseSuperblocks
@@ -61,9 +61,11 @@ instance Enum ROFeatureFlag where
   fromEnum = fromJust . flip lookup roCompatFlagTable
   toEnum = fromJust . flip lookup (map swap roCompatFlagTable)
 
-hasRoFlag :: Superblock -> ROFeatureFlag -> Bool
-hasRoFlag sb o =
-  sb ^. featureRoCompat .&. (fromIntegral . fromEnum $ o) == 1
+hasRoFlag :: Int -> ROFeatureFlag -> Bool
+hasRoFlag given o = given .&. (fromIntegral . fromEnum $ o) /= 0
+
+listRoFlags :: Int -> [ROFeatureFlag]
+listRoFlags given = filter (hasRoFlag given) (map fst roCompatFlagTable)
 
 -- | Required feature flags
 data RequiredFeatureFlag = Compression
@@ -85,6 +87,8 @@ instance Enum RequiredFeatureFlag where
   fromEnum = fromJust . flip lookup reqFlagTable
   toEnum = fromJust . flip lookup (map swap reqFlagTable)
 
-hasReqFlag :: Superblock -> RequiredFeatureFlag -> Bool
-hasReqFlag sb o =
-  sb ^. featureIncompat .&. (fromIntegral . fromEnum $ o) == 1
+hasReqFlag :: Int -> RequiredFeatureFlag -> Bool
+hasReqFlag given o = given .&. (fromIntegral . fromEnum $ o) /= 0
+
+listReqFlags :: Int -> [RequiredFeatureFlag]
+listReqFlags given = filter (hasReqFlag given) (map fst reqFlagTable)
