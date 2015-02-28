@@ -5,6 +5,7 @@ import Control.Monad
 import Data.Bits
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.Bytes.Get
+import Data.List (intercalate)
 import System.Ext2
 import System.Environment
 
@@ -15,9 +16,15 @@ main = do
     error "Usage: ext2checker <path to ext2 filesystem>"
   fs <- BL.readFile (head args)
   let s = flip runGetL fs $ skip 1024 >> readSuperblock
-  putStrLn $  "FS Size: " ++ show (fsSize s) ++ " Bytes"
-  putStrLn $  "Unallocated: " ++ show (unallocated s) ++ " Bytes"
-  putStrLn $  "FS State: " ++ fsState s
+  putStrLn $ "FS Size: " ++ show (fsSize s) ++ " Bytes"
+  putStrLn $ "Unallocated: " ++ show (unallocated s) ++ " Bytes"
+  putStrLn $ "FS State: " ++ fsState s
+  putStrLn $ "Required feature flags: " ++
+    (intercalate ", " . map show $ s ^. featureCompat)
+  putStrLn $ "Optional feature flags: " ++
+    (intercalate ", " . map show $ s ^. featureIncompat)
+  putStrLn $ "Read-only feature flags: " ++
+    (intercalate ", " . map show $ s ^. featureRoCompat)
 
   where
     fsSize :: Superblock -> Double
