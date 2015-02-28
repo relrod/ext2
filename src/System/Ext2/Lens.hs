@@ -35,7 +35,7 @@ module System.Ext2.Lens (
   ) where
 
 import Control.Lens
-import System.Ext2
+import System.Ext2.Tables
 import System.Ext2.Internal.LensHacks
 
 makeLensesWith namespaceLensRules ''Superblock

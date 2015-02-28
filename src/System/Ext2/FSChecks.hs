@@ -17,7 +17,7 @@ module System.Ext2.FSChecks (
 ) where
 
 import Control.Lens
-import System.Ext2
+import System.Ext2.Tables
 import System.Ext2.Lens
 
 -- | Given a superblock, ensure that its magic number is as-expected.

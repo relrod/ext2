@@ -16,7 +16,7 @@ import Control.Lens
 import Data.Bits ((.&.))
 import Data.Maybe (fromJust)
 import Data.Tuple (swap)
-import System.Ext2
+import System.Ext2.Tables
 import System.Ext2.Lens
 
 data OptionalFeatureFlag = DirPrealloc

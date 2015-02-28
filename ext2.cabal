@@ -14,8 +14,11 @@ cabal-version:       >= 1.10
 
 library
   exposed-modules:     System.Ext2
+                     , System.Ext2.FeatureFlags
                      , System.Ext2.FSChecks
                      , System.Ext2.Lens
+                     , System.Ext2.Parsers
+                     , System.Ext2.Tables
                      , System.Ext2.Utility
                      , System.Ext2.Internal.LensHacks
   build-depends:       base >= 4 && < 5

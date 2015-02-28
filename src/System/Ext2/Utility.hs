@@ -29,7 +29,7 @@ import Data.Bytes.Get
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.List (nub, sort)
 import qualified Data.Vector as V
-import System.Ext2
+import System.Ext2.Parsers
 import System.Ext2.Lens
 
 -- | Get the number of block groups within the file system.
