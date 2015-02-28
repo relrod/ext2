@@ -25,6 +25,7 @@ module System.Ext2.Tables (
 
 import Data.Word
 import qualified Data.ByteString.Lazy.Char8 as BL
+import System.Ext2.FeatureFlags
 
 data Superblock = Superblock {
     sbInodesCount       :: Word32
@@ -83,11 +84,11 @@ data Superblock = Superblock {
     -- ^ Size of each inode structure
   , sbBlockGroupNumber  :: Word16
     -- ^ Block group of this particular superblock (if it is a copy)
-  , sbFeatureCompat     :: Word32
+  , sbFeatureCompat     :: [RequiredFeatureFlag]
     -- ^ Optional features present
-  , sbFeatureIncompat   :: Word32
+  , sbFeatureIncompat   :: [OptionalFeatureFlag]
     -- ^ Required features present
-  , sbFeatureRoCompat   :: Word32
+  , sbFeatureRoCompat   :: [ROFeatureFlag]
     -- ^ Features which, if not present, force read-only mounting
   , sbUuid              :: BL.ByteString
     -- ^ File system UUID
@@ -119,7 +120,7 @@ data Superblock = Superblock {
     -- ^ Default mount options for the filesystem
   , sbFirstMetaBg       :: Word32
     -- ^ Block group ID of the first meta block group
-  } deriving (Eq, Ord, Show)
+  } deriving (Eq, Show)
 
 data BlockGroupDescriptorTable = BlockGroupDescriptorTable {
     bgBlockBitmap :: Word32
@@ -128,7 +129,7 @@ data BlockGroupDescriptorTable = BlockGroupDescriptorTable {
   , bgFreeBlocksCountBg :: Word16
   , bgFreeInodesCountBg :: Word16
   , bgUsedDirsCount   :: Word16
-  } deriving (Eq, Ord, Show)
+  } deriving (Eq, Show)
 
 data Inode = Inode {
     iMode :: Word16
@@ -149,7 +150,7 @@ data Inode = Inode {
   , iDirAcl :: Word32
   , iFaddr :: Word32
   , iOsd2 :: BL.ByteString -- TODO: Use a more appropriate type here.
-  } deriving (Eq, Ord, Show)
+  } deriving (Eq, Show)
 
 data Directory = Directory {
     dInode :: Word32
@@ -158,4 +159,4 @@ data Directory = Directory {
   , dFileType :: Word8
   , dName :: BL.ByteString
   , dPadding :: BL.ByteString
-  } deriving (Eq, Ord, Show)
+  } deriving (Eq, Show)

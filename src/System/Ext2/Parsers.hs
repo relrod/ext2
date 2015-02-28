@@ -40,6 +40,7 @@ module System.Ext2.Parsers (
 import Control.Applicative
 import Data.Bytes.Get
 import qualified Data.Vector as V
+import System.Ext2.FeatureFlags
 import System.Ext2.Tables
 
 -- See also 'readExtendedSuperblock'
@@ -73,9 +74,9 @@ readSuperblock =
              <*> getWord32le
              <*> getWord16le
              <*> getWord16le
-             <*> getWord32le
-             <*> getWord32le
-             <*> getWord32le
+             <*> ((listReqFlags . fromIntegral) <$> getWord32le)
+             <*> ((listOptionalFlags . fromIntegral) <$> getWord32le)
+             <*> ((listRoFlags . fromIntegral) <$> getWord32le)
              <*> getLazyByteString 16
              <*> getLazyByteString 16
              <*> getLazyByteString 64
