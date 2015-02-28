@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      : System.Ext2
@@ -29,3 +30,7 @@ import System.Ext2.Lens
 import System.Ext2.Parsers
 import System.Ext2.Tables
 import System.Ext2.Utility
+
+#ifdef HLINT
+{-# ANN module "HLint: ignore Use import/export shortcut" #-}
+#endif

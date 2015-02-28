@@ -31,13 +31,13 @@ main = do
     fsSize s =
       fromIntegral
       ((s ^. blocksCount) *
-       (1024 `shiftL` (fromIntegral (s ^. logBlockSize))))
+       (1024 `shiftL` fromIntegral (s ^. logBlockSize)))
 
     unallocated :: Superblock -> Double
     unallocated s =
       fromIntegral
       ((s ^. freeBlocksCount) *
-       (1024 `shiftL` (fromIntegral (s ^. logBlockSize))))
+       (1024 `shiftL` fromIntegral (s ^. logBlockSize)))
 
     fsState :: Superblock -> String
     fsState s = case s ^. state of
