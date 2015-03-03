@@ -62,7 +62,7 @@ readSuperblock =
              <*> getWord16le
              <*> getWord16le
              <*> getWord16le
-             <*> getWord16le
+             <*> (word16ToFSState <$> getWord16le)
              <*> getWord16le
              <*> getWord16le
              <*> getWord32le

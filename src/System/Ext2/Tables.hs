@@ -10,8 +10,11 @@
 -- Types for various tables and types found within ext2 filesystems.
 ----------------------------------------------------------------------------
 module System.Ext2.Tables (
+    FSState
+  , word16ToFSState
+
     -- * Superblock
-    Superblock (..)
+  , Superblock (..)
 
     -- * BlockGroupDescriptorTable
   , BlockGroupDescriptorTable (..)
@@ -26,6 +29,14 @@ module System.Ext2.Tables (
 import Data.Word
 import qualified Data.ByteString.Lazy.Char8 as BL
 import System.Ext2.FeatureFlags
+
+-- This isn't technically a table, but it doesn't deserve its own module,
+-- either.
+data FSState = Clean | Errors deriving (Eq, Ord, Show)
+
+word16ToFSState :: Word16 -> FSState
+word16ToFSState 1 = Clean
+word16ToFSState _ = Errors
 
 data Superblock = Superblock {
     sbInodesCount       :: Word32
@@ -60,7 +71,7 @@ data Superblock = Superblock {
     -- ^ Number of allowed mounts before requiring a consistency check
   , sbMagic             :: Word16
     -- ^ ext2 signature: @0xef53@
-  , sbState             :: Word16
+  , sbState             :: FSState
     -- ^ Filesystem state
   , sbErrors            :: Word16
     -- ^ What to do on an error condition

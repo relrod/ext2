@@ -18,7 +18,7 @@ main = do
   let s = flip runGetL fs $ skip 1024 >> readSuperblock
   putStrLn $ "FS Size: " ++ show (fsSize s) ++ " Bytes"
   putStrLn $ "Unallocated: " ++ show (unallocated s) ++ " Bytes"
-  putStrLn $ "FS State: " ++ fsState s
+  putStrLn $ "FS State: " ++  s ^. state . to show
   putStrLn $ "Required feature flags: " ++
     (intercalate ", " . map show $ s ^. featureCompat)
   putStrLn $ "Optional feature flags: " ++
@@ -38,8 +38,3 @@ main = do
       fromIntegral
       ((s ^. freeBlocksCount) *
        (1024 `shiftL` fromIntegral (s ^. logBlockSize)))
-
-    fsState :: Superblock -> String
-    fsState s = case s ^. state of
-      1 -> "Clean"
-      _ -> "Errors"
